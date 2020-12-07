@@ -6,19 +6,17 @@ Reactive Scene Relighting with Projection Mapping
 Mobile unit is a Rbpi 4b running Ubuntu 20.04, with an HDMI project
 as the monitor and a Realsense D415 as the RGBD sensor.
 
-From apt: `git python3 python3-pip python3-tk ros-base-dev ros-base-python-dev`
-(This should be ROS Melodic, at least as of time of writing.)
+Install from apt `build-essential`
 
-Librealsense, for the camera driver:
-1) Install `librealsense` packages from [https://github.com/IntelRealSense/librealsense/blob/master/doc/distribution_linux.md#installing-the-packages]
-2) Install realsense ROS package following from-source instructions [https://github.com/IntelRealSense/librealsense/blob/master/doc/distribution_linux.md]
+Install apriltag core library from `https://github.com/AprilRobotics/apriltag/tree/3.1.1`, following directions.
 
+Install `librealsense` packages from source following  [https://github.com/IntelRealSense/librealsense/blob/master/doc/installation.md]. When doing CMake config, make sure the apriltag library is found, enable any examples you want (recommend `BUILD_EXAMPLES` and `BUILD_GRAPHICAL_EXAMPLES` so you at least get `realsense-viewer`), and `BUILD_PYTHON_BINDINGS` is on.
 
-
+(Maybe follow [ROS Noetic install-from-apt instructions]. I use ` ros-noetic-desktop` for dev, but I suspect `ros-noetic-ros-base` will have everything you need to run this. But I don't require this yet, I'm seeing if I can avoid having ROS in there...)
 
 # Commands to run
 
-Via SSH:
+Via SSH (default 192.168.0.142 on home net))
 1) SSH in
 2) `export DISPLAY=:0.0`
 3) Invoke script with python3.
