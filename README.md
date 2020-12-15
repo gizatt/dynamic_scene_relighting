@@ -14,6 +14,9 @@ Install `librealsense` packages from source following  [https://github.com/Intel
 
 (Maybe follow [ROS Noetic install-from-apt instructions]. I use ` ros-noetic-desktop` for dev, but I suspect `ros-noetic-ros-base` will have everything you need to run this. But I don't require this yet, I'm seeing if I can avoid having ROS in there...)
 
+
+For Python, need Python3, `tkinter`, `pillow`.
+
 # Commands to run
 
 Via SSH (default 192.168.0.142 on home net))
