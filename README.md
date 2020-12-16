@@ -6,7 +6,7 @@ Reactive Scene Relighting with Projection Mapping
 Mobile unit is a Rbpi 4b running Ubuntu 20.04, with an HDMI project
 as the monitor and a Realsense D415 as the RGBD sensor.
 
-Install from apt `build-essential`
+Install from apt `build-essential libopencv-dev`.
 
 Install apriltag core library from `https://github.com/AprilRobotics/apriltag/tree/3.1.1`, following directions.
 
