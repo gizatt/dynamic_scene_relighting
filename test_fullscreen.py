@@ -1,10 +1,13 @@
 import tkinter as tk
 from PIL import Image, ImageTk
+import matplotlib.pyplot as plt
 import os
 import cv2
 import numpy as np
 from apriltag import apriltag
-import pyrealsense2 as rs
+import pyrealsense2.pyrealsense2 as rs
+
+
 
 '''
 Opens a fullscreen window and repeatedly:
@@ -42,14 +45,14 @@ class RealsenseHandler():
         # rs.align allows us to perform alignment of depth frames to others frames
         # The "align_to" is the stream type to which we plan to align depth frames.
         align_to = rs.stream.color
-        self.align = rs.align(self.align_to)
+        self.align = rs.align(align_to)
 
     def get_frame(self):
         # Get frameset of color and depth
         frames = self.pipeline.wait_for_frames()
 
         # Align the depth frame to color frame
-        aligned_frames = self.align.process(self.frames)
+        aligned_frames = self.align.process(frames)
 
         # Get aligned frames
         aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
@@ -83,17 +86,18 @@ if __name__ == "__main__":
     img_path = "images/tag36_11_%05d.png" % 0
     assert os.path.isfile(img_path), img_path
     img = Image.open(img_path)
-    img = img.resize((im_size, im_size), Image.NEAREST)
+    img = img.resize((int(im_size/2), int(im_size/2)), Image.NEAREST)
     img = ImageTk.PhotoImage(img)
     canvas.create_image(0,0, anchor=tk.NW, image=img)
 
 
-    detector = apriltag("tagStandard41h12")
+    detector = apriltag(family="tag36h11", blur=0.8, debug=1)
     while (1):
         # Try to detect it.
         color_image, depth_image = realsense_manager.get_frame()
-        detections = detector.detect(color_image)
+        color_image_rgb = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+        plt.imsave("color_image.png", color_image_rgb)
+        gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
+        detections = detector.detect(gray_image)
         print("DETECTIONS:", detections)
-
-        tk.update_idletasks()
-        tk.update()
+        root.update()
