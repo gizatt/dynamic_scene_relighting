@@ -1,12 +1,16 @@
-import tkinter as tk
-from PIL import Image, ImageTk
-import matplotlib.pyplot as plt
+import glob
 import os
+import random
+import time
+
 import cv2
+import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image, ImageTk
+import tkinter as tk
+
 from apriltag import apriltag
 import pyrealsense2.pyrealsense2 as rs
-
 
 
 '''
@@ -83,21 +87,61 @@ if __name__ == "__main__":
     canvas.pack()      
     canvas.configure(background='black')
 
-    img_path = "images/tag36_11_%05d.png" % 0
-    assert os.path.isfile(img_path), img_path
-    img = Image.open(img_path)
-    img = img.resize((int(im_size/2), int(im_size/2)), Image.NEAREST)
-    img = ImageTk.PhotoImage(img)
-    canvas.create_image(0,0, anchor=tk.NW, image=img)
+    tag_paths = ["images/tag36_11_%05d.png" % k for k in range(3)]
+    base_tags = [Image.open(path) for path in tag_paths]
 
 
-    detector = apriltag(family="tag36h11", blur=0.8, debug=1)
+    detector = apriltag(family="tag36h11")
     while (1):
-        # Try to detect it.
+        # Put a random apriltag at a random location.
+        canvas.delete("all")
+        base_tag_k = random.randrange(3)
+        base_tag = base_tags[base_tag_k]
+        size = random.randrange(128, 1024)
+        tag_img = base_tag.resize((size, size), Image.NEAREST)
+        img = ImageTk.PhotoImage(tag_img)
+        x = random.randrange(0, w-size)
+        y = random.randrange(0, h-size)
+        canvas.create_image(x,y, anchor=tk.NW, image=img)
+        
+        # Get projected image as an image
+        canvas.postscript(file = "projected.eps")
+        projected_image = Image.open("projected.eps").convert('L').resize((w, h))
+        root.update()
+        
+        projected_corners = np.array([[x, y+size],
+                              [x+size, y+size],
+                              [x+size, y],
+                              [x, y]])
+        projected_detections = detector.detect(projected_image)
+        print("Detections from projected: ", projected_detections)
+        print("Sanity-check: expected corners: ", projected_corners)
+        if len(projected_detections) != 1 or projected_detections[0]["id"] != base_tag_k:
+            print("Bad detection of projected image, skipping")
+            continue
+        projected_detection = projected_detections[0]
+        # There's a shift between those two. Huh? That'll be a problem
+        # in calibration... but I probably won't be using TKinter for much
+        # longer, so I'll sleep on this and get the pipeline working.
+
+        # Sleep to be sure the projector is doing its thing.
+        time.sleep(0.5)
+
+        # Try to detect it from the realsense.
         color_image, depth_image = realsense_manager.get_frame()
         color_image_rgb = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
         plt.imsave("color_image.png", color_image_rgb)
         gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
         detections = detector.detect(gray_image)
-        print("DETECTIONS:", detections)
-        root.update()
+        print("REALSESNE DETECTIONS:", detections)
+        if len(detections) == 1 and detections[0]["id"] == base_tag_k:
+            # Passed sanity check, so record this calibration pair.
+            detection = detections[0]
+            with open("calibration_pairs.csv", "a") as f:
+                for k in range(4):
+                    x1, y1 = projected_detection['lb-rb-rt-lt'][k, :]
+                    x2, y2 = detection['lb-rb-rt-lt'][k, :]
+                    f.write("%f, %f, %f, %f\n" % (x1, y1, x2, y2))
+            print("GOOD")
+            
+
