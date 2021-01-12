@@ -91,7 +91,7 @@ if __name__ == "__main__":
     base_tags = [Image.open(path) for path in tag_paths]
 
 
-    detector = apriltag(family="tag36h11")
+    detector = apriltag(family="tag36h11", debug=True)
     while (1):
         # Put a random apriltag at a random location.
         canvas.delete("all")
