@@ -2,6 +2,7 @@ import glob
 import os
 import random
 import time
+import sys
 
 import cv2
 import matplotlib.pyplot as plt
@@ -20,6 +21,15 @@ Opens a fullscreen window and repeatedly:
 - Detects apriltags in the detected frame, recording the detected pixel locations
 - Appends the [sent, observed] pixel location pairs to a file.
 '''
+
+"""
+Returns a camera matrix K from librealsense intrinsics
+From librealsense/wrappers/python/examples/t265_stereo.py
+"""
+def to_camera_matrix(intrinsics):
+    return np.array([[intrinsics.fx,             0, intrinsics.ppx],
+                     [            0, intrinsics.fy, intrinsics.ppy],
+                     [            0,             0,              1]])
 
 class RealsenseHandler():
     '''
@@ -51,6 +61,9 @@ class RealsenseHandler():
         align_to = rs.stream.color
         self.align = rs.align(align_to)
 
+        # We'll want to store the intrinsics once we start getting images.
+        self.aligned_depth_K = None
+    
     def get_frame(self):
         # Get frameset of color and depth
         frames = self.pipeline.wait_for_frames()
@@ -67,10 +80,17 @@ class RealsenseHandler():
             print("Invalid aligned or color frame.")
             return
 
+        if self.aligned_depth_K is None:
+            depth_intrinsics = rs.video_stream_profile(aligned_depth_frame.profile).get_intrinsics()
+            self.aligned_depth_K = to_camera_matrix(depth_intrinsics)
+            self.aligned_depth_inv = np.linalg.inv(self.aligned_depth_K)
+            np.savetxt("d415_intrinsics.csv", self.aligned_depth_K)
+
+        # Extract aligned depth frame intrinsics
         depth_image = np.asanyarray(aligned_depth_frame.get_data())
         color_image = np.asanyarray(color_frame.get_data())
         return color_image, depth_image
-
+        
 
 if __name__ == "__main__":
     realsense_manager = RealsenseHandler()
@@ -133,15 +153,22 @@ if __name__ == "__main__":
         plt.imsave("color_image.png", color_image_rgb)
         gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
         detections = detector.detect(gray_image)
-        print("REALSESNE DETECTIONS:", detections)
+        print("REALSENSE DETECTIONS:", detections)
         if len(detections) == 1 and detections[0]["id"] == base_tag_k:
             # Passed sanity check, so record this calibration pair.
             detection = detections[0]
             with open("calibration_pairs.csv", "a") as f:
                 for k in range(4):
-                    x1, y1 = projected_detection['lb-rb-rt-lt'][k, :]
-                    x2, y2 = detection['lb-rb-rt-lt'][k, :]
-                    f.write("%f, %f, %f, %f\n" % (x1, y1, x2, y2))
+                    u1, v1 = projected_detection['lb-rb-rt-lt'][k, :]
+
+                    # Collect detection in realsense frame and project
+                    # out to a camera-frame XYZ triplet using inverse
+                    # RGBD intrinsics.
+                    u2, v2 = detection['lb-rb-rt-lt'][k, :]
+                    depth = depth_image[int(v2), int(u2)]
+                    x2, y2, z2 = np.dot(realsense_manager.aligned_depth_inv,
+                                        np.array([u2, v2, depth]))
+                    f.write("%f, %f, %f, %f, %f, %f, %f\n" % (u1, v1, u2, v2, x2, y2, z2))
             print("GOOD")
             
 
