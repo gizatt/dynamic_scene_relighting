@@ -83,7 +83,9 @@ if __name__ == "__main__":
         time.sleep(0.5)
 
         # Try to detect it from the realsense.
-        color_image, depth_image, _ = realsense_manager.get_frame()
+        color_image, depth_image, points = realsense_manager.get_frame(include_pointcloud=True)
+        verts = np.asarray(points.get_vertices(2)).reshape(depth_image.shape[0], depth_image.shape[1], 3)
+    
         color_image_rgb = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
         plt.imsave("color_image.png", color_image_rgb)
         gray_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2GRAY)
@@ -100,9 +102,7 @@ if __name__ == "__main__":
                     # out to a camera-frame XYZ triplet using inverse
                     # RGBD intrinsics.
                     u2, v2 = detection['lb-rb-rt-lt'][k, :]
-                    depth = depth_image[int(v2), int(u2)]
-                    x2, y2, z2 = np.dot(realsense_manager.aligned_depth_inv,
-                                        np.array([u2, v2, depth]))
+                    x2, y2, z2 = verts[int(v2), int(u2)]
                     f.write("%f, %f, %f, %f, %f, %f, %f\n" % (u1, v1, u2, v2, x2, y2, z2))
             print("GOOD")
             
