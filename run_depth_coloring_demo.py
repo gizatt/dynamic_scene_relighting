@@ -21,14 +21,20 @@ Significant reference to
 https://github.com/IntelRealSense/librealsense/blob/development/wrappers/python/examples/pyglet_pointcloud_viewer.py
 '''
 
+# Subsample on depth image size
+sN = 1
+
 def get_extrinsics():
     return np.loadtxt("extrinsics.csv")
     
+def get_intrinsics():
+    intr_3x3 = np.loadtxt("projector_intrinsics.csv")
+    intr_4x4 = np.eye(4)
+    intr_4x4[:3, :3] = intr_3x3
+    return intr_4x4
+
 def get_fov():
     fov = np.loadtxt("projector_fov.csv")
-    #intr_3x3 = np.loadtxt("projector_intrinsics.csv")
-    #intr_4x4 = np.eye(4)
-    #intr_4x4[:3, :3] = intr_3x3
     return fov
     
 
@@ -58,8 +64,8 @@ window.push_handlers(keys)
 
 # Create a VertexList to hold pointcloud data
 # Will pre-allocates memory according to the attributes below
-w = int(realsense_manager.w / 8)
-h = int(realsense_manager.h / 8)
+w = int(realsense_manager.w / sN)
+h = int(realsense_manager.h / sN)
 vertex_list = pyglet.graphics.vertex_list(
     w * h, 'v3f/stream', 't2f/stream', 'n3f/stream')
 # Create and allocate memory for our color data
@@ -103,8 +109,11 @@ def on_draw():
     # Set view extrinsics to projector offset in RGBD frame
     gl.glMatrixMode(gl.GL_MODELVIEW)
     gl.glLoadIdentity()
+    gl_better.glMultMatrixd(get_extrinsics())
     #gl.glTranslated(0., 0., -20.)
-#    gl.glRotated(180., 0., 1., 0.)
+    gl.glRotated(180., 0., 1., 0.)
+    gl.glRotated(180., 0., 0., 1.)
+    '''
     try:
         x, y, z, r, p, y = get_extrinsics()
         gl_better.glRotated(y, 0., 0., 1.)
@@ -113,6 +122,7 @@ def on_draw():
         gl_better.glTranslated(x, y, z)
     except ValueError as e:
         print("skipping extrinsics this time")
+    '''
 
     gl.glPointSize(10.)
     distance = (1., 0, 0.)
@@ -150,14 +160,14 @@ def on_draw():
 
 
 def run(dt):
-    global w, h
+    global w, h, sN
     window.set_caption("RealSense (%dx%d) %dFPS (%.2fms)" %
                        (w, h, 0 if dt == 0 else 1.0 / dt, dt * 1000))
 
     print("Waiting for frame")
     color_image, depth_image, points = realsense_manager.get_frame(include_pointcloud=True)
-    plt.imsave("curr.png", color_image[::-1, ::-1, ::-1])
-    depth_image = depth_image[::8, ::8]
+    #plt.imsave("curr.png", color_image[::-1, ::-1, ::-1])
+    depth_image = depth_image[::sN, ::sN]
     print("Max/mean depth: ", np.max(depth_image)/1000., np.mean(depth_image)/1000.)
     min_depth = 1.0*1000
     max_depth = 2.0*1000
@@ -177,10 +187,10 @@ def run(dt):
         print("Image data pitch: ", image_data.pitch, " vs", color_source.strides[0])
     image_data.set_data("RGB", color_source.strides[0], color_source.ctypes.data)
 
-    verts = np.asarray(points.get_vertices(2)).reshape(h*8, w*8, 3)
-    verts = verts[::8, ::8, :]
-    texcoords = np.asarray(points.get_texture_coordinates(2)).reshape(h*8, w*8, 2)
-    texcoords = texcoords[::8, ::8, :]
+    verts = np.asarray(points.get_vertices(2)).reshape(h*sN, w*sN, 3)
+    verts = verts[::sN, ::sN, :]
+    texcoords = np.asarray(points.get_texture_coordinates(2)).reshape(h*sN, w*sN, 2)
+    texcoords = texcoords[::sN, ::sN, :]
 
     if len(vertex_list.vertices) != verts.size:
         vertex_list.resize(verts.size // 3)
