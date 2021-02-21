@@ -38,18 +38,6 @@ def get_fov():
     return fov
     
 
-
-def convert_fmt(fmt):
-    """rs.format to pyglet format string"""
-    return {
-        rs.format.rgb8: 'RGB',
-        rs.format.bgr8: 'BGR',
-        rs.format.rgba8: 'RGBA',
-        rs.format.bgra8: 'BGRA',
-        rs.format.y8: 'L',
-    }[fmt]
-
-
 realsense_manager = RealsenseHandler()
 
 # pyglet
@@ -59,8 +47,6 @@ window = pyglet.window.Window(
         #samples=8  # MSAA,
     ),
     fullscreen=True, vsync=True)
-keys = pyglet.window.key.KeyStateHandler()
-window.push_handlers(keys)
 
 # Create a VertexList to hold pointcloud data
 # Will pre-allocates memory according to the attributes below
@@ -73,11 +59,6 @@ image_data = pyglet.image.ImageData(w, h, 'RGB', (gl.GLubyte * (w * h * 3))())
 
 # FPS display
 fps_display = pyglet.window.FPSDisplay(window)
-
-def on_key_press(symbol, modifiers):
-    if symbol == pyglet.window.key.Q:
-        window.close()            
-window.push_handlers(on_key_press)
 
 @window.event
 def on_draw():
@@ -208,5 +189,3 @@ def run(dt):
 
 pyglet.clock.schedule(run)
 pyglet.app.run()
-
-        
