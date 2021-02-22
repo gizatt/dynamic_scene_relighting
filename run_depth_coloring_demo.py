@@ -24,14 +24,69 @@ https://github.com/IntelRealSense/librealsense/blob/development/wrappers/python/
 # Subsample on depth image size
 sN = 1
 
-def get_extrinsics():
-    return np.loadtxt("extrinsics.csv")
+def get_extrinsics(inv=False):
+    extr = np.loadtxt("extrinsics.csv")
+    if inv:
+        extr[:3, :3] = extr[:3, :3].T
+        extr[:3, 3] = -extr[:3, :3].dot(extr[:3, 3])
+    return extr
     
+def convert_hz_intrinsic_to_opengl_projection(K,x0,y0,width,height,znear,zfar, window_coords='y up'):
+    # https://gist.github.com/astraw/1341472#file_calib_test_numpy.py
+    znear = float(znear)
+    zfar = float(zfar)
+    depth = zfar - znear
+    q = -(zfar + znear) / depth
+    qn = -2 * (zfar * znear) / depth
+
+    if window_coords=='y up':
+        proj = np.array([[ -2*K[0,0]/width, -2*K[0,1]/width, (-2*K[0,2]+width+2*x0)/width, 0 ],
+                         [  0,             -2*K[1,1]/height,(-2*K[1,2]+height+2*y0)/height, 0],
+                         [0,0,q,qn],  # This row is standard glPerspective and sets near and far planes.
+                         [0,0,-1,0]]) # This row is also standard glPerspective.
+    else:
+        assert window_coords=='y down'
+        proj = np.array([[ -2*K[0,0]/width, -2*K[0,1]/width, (-2*K[0,2]+width+2*x0)/width, 0 ],
+                         [  0,              2*K[1,1]/height,( 2*K[1,2]-height+2*y0)/height, 0],
+                         [0,0,q,qn],  # This row is standard glPerspective and sets near and far planes.
+                         [0,0,-1,0]]) # This row is also standard glPerspective.
+    return proj
+
 def get_intrinsics():
+    # REf https://amytabb.com/ts/2019_06_28/
     intr_3x3 = np.loadtxt("projector_intrinsics.csv")
-    intr_4x4 = np.eye(4)
-    intr_4x4[:3, :3] = intr_3x3
-    return intr_4x4
+    cx = intr_3x3[0, 2]
+    cy = intr_3x3[1, 2]
+    width = cx * 2
+    height = cy * 2
+    far = 20.0
+    near = 0.01
+    intr_mat_1 = convert_hz_intrinsic_to_opengl_projection(intr_3x3, 0., 0., width, height, near, far)
+    
+    fx = intr_3x3[0, 0]
+    fy = intr_3x3[1, 1]
+    cx = intr_3x3[0, 2]
+    cy = intr_3x3[1, 2]
+    width = cx * 2
+    height = cy * 2
+    K_gl = np.array([
+        [-fx, 0., -cx, 0.],
+        [0., -fy, -cy, 0.],
+        [0., 0., (near + far), (near * far)],
+        [0., 0., -1., 0.]
+    ])
+    NDC = np.array([
+        [2 / width, 0., 0., -1.],
+        [0., 2 / height, 0., -1.],
+        [0., 0., -2. / (far - near), -(far + near)/(far - near)],
+        [0., 0., 0., 1.]
+    ])
+
+    #print("total projection: ", NDC.dot(K_gl))
+    #print("Test project a point: ", NDC.dot(K_gl).dot(np.array([0.7, 0.5, 1.33, 1.])))
+    #print("Total projection, second method: ", intr_mat_1)
+    #print("Test project a point: ", intr_mat_1.dot(np.array([0.7, 0.5, 1.33, 1.])))
+    return np.dot(NDC, K_gl)
 
 def get_fov():
     fov = np.loadtxt("projector_fov.csv")
@@ -74,7 +129,15 @@ def on_draw():
     gl.glMatrixMode(gl.GL_PROJECTION)
     gl.glLoadIdentity()
     gl.gluPerspective(get_fov(), width / float(height), 0.01, 20.)
-    #gl_better.glMultMatrixd(get_intrinsics())
+
+    def print_curr_matrix():
+        print(gl_better.glGetFloatv(gl_better.GL_PROJECTION_MATRIX))
+    print("Perspective mat:")
+    print_curr_matrix()
+    gl.glLoadIdentity()
+    gl_better.glMultMatrixd(get_intrinsics().T)
+    print("Perspective mat from my code:")
+    print_curr_matrix()
 
 
     gl.glMatrixMode(gl.GL_TEXTURE)
@@ -90,10 +153,28 @@ def on_draw():
     # Set view extrinsics to projector offset in RGBD frame
     gl.glMatrixMode(gl.GL_MODELVIEW)
     gl.glLoadIdentity()
-    gl_better.glMultMatrixd(get_extrinsics())
-    #gl.glTranslated(0., 0., -20.)
+    
+    def print_curr_matrix():
+        print(gl_better.glGetFloatv(gl_better.GL_MODELVIEW_MATRIX))
+    
+    gl.glTranslated(0., 0., 1.)
+    print("Post translatE: ")
+    print_curr_matrix()
     gl.glRotated(180., 0., 1., 0.)
-    gl.glRotated(180., 0., 0., 1.)
+    print("Post rotate: ")
+    print_curr_matrix()
+
+    gl.glLoadIdentity()
+
+    # Flip from +z to -z forward
+    gl.glRotated(180., 0., 1., 0.)
+    gl_better.glMultMatrixd(get_extrinsics().T)
+    
+    print("My tf: ")
+    print_curr_matrix()
+    
+
+    #gl.glTranslated(0., 0., 2.)
     '''
     try:
         x, y, z, r, p, y = get_extrinsics()
@@ -105,7 +186,7 @@ def on_draw():
         print("skipping extrinsics this time")
     '''
 
-    gl.glPointSize(10.)
+    gl.glPointSize(5.)
     distance = (1., 0, 0.)
     gl.glPointParameterfv(gl.GL_POINT_DISTANCE_ATTENUATION,
                         (gl.GLfloat * 3)(*distance))
@@ -154,7 +235,7 @@ def run(dt):
     max_depth = 2.0*1000
     color_source = plt.get_cmap("hsv")((depth_image - min_depth)/(max_depth-min_depth))[:, :, :3]
     color_source = np.uint8(color_source * 255)
-
+    plt.imsave("Curr.png", color_source[::-1, ::-1, :])
     print("Color range: ", np.min(color_source), np.max(color_source))
     global image_data
     
@@ -173,6 +254,7 @@ def run(dt):
     texcoords = np.asarray(points.get_texture_coordinates(2)).reshape(h*sN, w*sN, 2)
     texcoords = texcoords[::sN, ::sN, :]
 
+    print(verts)
     if len(vertex_list.vertices) != verts.size:
         vertex_list.resize(verts.size // 3)
         # need to reassign after resizing
