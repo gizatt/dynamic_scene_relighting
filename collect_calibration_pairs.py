@@ -103,7 +103,6 @@ def log_detections():
     # Try to detect it from the realsense.
     color_image, depth_image, points = realsense_manager.get_frame(include_pointcloud=True)
     verts = np.asarray(points.get_vertices(2)).reshape(depth_image.shape[0], depth_image.shape[1], 3)
-    print(verts)
     plt.imsave("depth_image.png", depth_image)
     pyglet.image.get_buffer_manager().get_color_buffer().save("buffer_dump.png")
     image_window = cv2.cvtColor(cv2.imread("buffer_dump.png"), cv2.COLOR_BGR2GRAY)
@@ -134,7 +133,7 @@ def log_detections():
 
 def run(dt):
     global projected_corners
-    if (time.time() - last_sent_corners_time) > 1.:
+    if (time.time() - last_sent_corners_time) > 0.5:
         if projected_corners is not None:
             log_detections()
         send_new_corners()
