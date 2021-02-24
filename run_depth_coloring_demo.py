@@ -22,7 +22,7 @@ https://github.com/IntelRealSense/librealsense/blob/development/wrappers/python/
 '''
 
 # Subsample on depth image size
-sN = 1
+sN = 4
 
 def get_extrinsics(inv=False):
     extr = np.loadtxt("extrinsics.csv")
@@ -99,7 +99,7 @@ realsense_manager = RealsenseHandler()
 window = pyglet.window.Window(
     config=gl.Config(
         double_buffer=True,
-        #samples=8  # MSAA,
+        samples=4  # MSAA,
     ),
     fullscreen=True, vsync=True)
 
@@ -127,18 +127,13 @@ def on_draw():
 
     # Set view intrinsics to exactly projector intrinsics
     gl.glMatrixMode(gl.GL_PROJECTION)
-    gl.glLoadIdentity()
-    gl.gluPerspective(get_fov(), width / float(height), 0.01, 20.)
-
+    #gl.glLoadIdentity()
+    #gl.gluPerspective(get_fov(), width / float(height), 0.01, 20.)
     def print_curr_matrix():
         print(gl_better.glGetFloatv(gl_better.GL_PROJECTION_MATRIX))
-    print("Perspective mat:")
-    print_curr_matrix()
     gl.glLoadIdentity()
     gl_better.glMultMatrixd(get_intrinsics().T)
-    print("Perspective mat from my code:")
-    print_curr_matrix()
-
+    
 
     gl.glMatrixMode(gl.GL_TEXTURE)
     gl.glLoadIdentity()
@@ -156,25 +151,13 @@ def on_draw():
     
     def print_curr_matrix():
         print(gl_better.glGetFloatv(gl_better.GL_MODELVIEW_MATRIX))
-    
-    gl.glTranslated(0., 0., 1.)
-    print("Post translatE: ")
-    print_curr_matrix()
-    gl.glRotated(180., 0., 1., 0.)
-    print("Post rotate: ")
-    print_curr_matrix()
 
     gl.glLoadIdentity()
-
     # Flip from +z to -z forward
     gl.glRotated(180., 0., 1., 0.)
     gl_better.glMultMatrixd(get_extrinsics().T)
-    
-    print("My tf: ")
-    print_curr_matrix()
-    
-
-    #gl.glTranslated(0., 0., 2.)
+    #print("My tf: ")
+    #print_curr_matrix()
     '''
     try:
         x, y, z, r, p, y = get_extrinsics()
@@ -186,7 +169,7 @@ def on_draw():
         print("skipping extrinsics this time")
     '''
 
-    gl.glPointSize(5.)
+    gl.glPointSize(20.)
     distance = (1., 0, 0.)
     gl.glPointParameterfv(gl.GL_POINT_DISTANCE_ATTENUATION,
                         (gl.GLfloat * 3)(*distance))
@@ -199,11 +182,10 @@ def on_draw():
         gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MAG_FILTER, gl.GL_NEAREST)
 
     # comment this to get round points with MSAA on
-    gl.glEnable(gl.GL_POINT_SPRITE)
+    #gl.glEnable(gl.GL_POINT_SPRITE)
+    gl.glEnable(gl.GL_MULTISAMPLE)
 
-    print("Drawing vertex list")
     vertex_list.draw(gl.GL_POINTS)
-    print("Done drawing vertex list")
     gl.glDisable(texture.target)
     gl.glDisable(gl.GL_LIGHTING)
 
@@ -220,23 +202,56 @@ def on_draw():
     fps_display.draw()
     print("Done with draw")
 
-
+iteration = 0
 def run(dt):
-    global w, h, sN
+    global w, h, sN, iteration
+    iteration += 1
     window.set_caption("RealSense (%dx%d) %dFPS (%.2fms)" %
                        (w, h, 0 if dt == 0 else 1.0 / dt, dt * 1000))
 
     print("Waiting for frame")
     color_image, depth_image, points = realsense_manager.get_frame(include_pointcloud=True)
-    #plt.imsave("curr.png", color_image[::-1, ::-1, ::-1])
+    plt.imsave("out/curr_color_%03d.png" % iteration, color_image[::-1, ::-1, :])
+    verts = np.asarray(points.get_vertices(2)).reshape(h*sN, w*sN, 3)
+    verts = verts[::sN, ::sN, :]
+
     depth_image = depth_image[::sN, ::sN]
     print("Max/mean depth: ", np.max(depth_image)/1000., np.mean(depth_image)/1000.)
     min_depth = 1.0*1000
     max_depth = 2.0*1000
-    color_source = plt.get_cmap("hsv")((depth_image - min_depth)/(max_depth-min_depth))[:, :, :3]
-    color_source = np.uint8(color_source * 255)
-    plt.imsave("Curr.png", color_source[::-1, ::-1, :])
-    print("Color range: ", np.min(color_source), np.max(color_source))
+    
+    depth_color_source = plt.get_cmap("hsv")((depth_image - min_depth)/(max_depth-min_depth))[:, :, :3]
+    depth_color_source = np.uint8(depth_color_source * 255)
+    color_color_source = color_image[::sN, ::sN, :]
+
+    plt.imsave("out/curr_depth.png", depth_color_source[::-1, ::-1, ::-1])
+
+    # Compute normals -- probably not accurate since image is very noisy
+    dy, dx = np.gradient(verts, axis=(0, 1))
+    n = np.cross(dx, dy)
+    norm = np.sqrt((n*n).sum(axis=2, keepdims=True))
+    normals = np.divide(n, norm, out=n, where=norm != 0)
+    normals = np.ascontiguousarray(normals)
+    normal_image = np.uint8(normals * 127 + 127)
+    plt.imsave("out/curr_normals.png", normal_image[::1, ::-1, :])
+
+    # Simulate a light orbiting around the z axis by brighting
+    # base on dot product of a time-varying normal and the
+    # normal image.
+    t = iteration * np.pi/10
+    min_brightness_depth = 0.5*1000
+    max_brightness_depth = 1.6*1000
+    light_direction = np.array([np.cos(t), np.sin(t), 0.])
+    brightness = (light_direction * normals).sum(axis=-1)/2. + 1.
+    brightness[depth_image < min_brightness_depth] = 0.
+    brightness[depth_image > max_brightness_depth] = 0.
+
+    brightness = np.repeat(brightness[:, :, np.newaxis], 3, axis=-1)
+    brightness_color_source = np.uint8(brightness * 255)
+    plt.imsave("out/curr_brightness_%03d.png" % iteration, brightness_color_source[::-1, ::-1, :])
+    
+    color_source =  brightness_color_source
+
     global image_data
     
     # copy image data to pyglet
@@ -249,12 +264,9 @@ def run(dt):
         print("Image data pitch: ", image_data.pitch, " vs", color_source.strides[0])
     image_data.set_data("RGB", color_source.strides[0], color_source.ctypes.data)
 
-    verts = np.asarray(points.get_vertices(2)).reshape(h*sN, w*sN, 3)
-    verts = verts[::sN, ::sN, :]
     texcoords = np.asarray(points.get_texture_coordinates(2)).reshape(h*sN, w*sN, 2)
     texcoords = texcoords[::sN, ::sN, :]
 
-    print(verts)
     if len(vertex_list.vertices) != verts.size:
         vertex_list.resize(verts.size // 3)
         # need to reassign after resizing
@@ -268,6 +280,7 @@ def run(dt):
 
     copy(vertex_list.vertices, verts)
     copy(vertex_list.tex_coords, texcoords)
+    print("Done with run call")
 
 pyglet.clock.schedule(run)
 pyglet.app.run()
