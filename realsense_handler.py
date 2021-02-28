@@ -34,7 +34,7 @@ class RealsenseHandler():
         # Create an align object
         # rs.align allows us to perform alignment of depth frames to others frames
         # The "align_to" is the stream type to which we plan to align depth frames.
-        align_to = rs.stream.color
+        align_to = rs.stream.depth
         self.align = rs.align(align_to)
 
         # We'll want to store the intrinsics once we start getting images.
