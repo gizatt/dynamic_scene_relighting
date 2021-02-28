@@ -8,7 +8,7 @@ as the monitor and a Realsense D415 as the RGBD sensor.
 
 Follow [https://www.dedoimedo.com/computers/rpi4-ubuntu-mate-hw-video-acceleration.html] to get hardware acceleration working.
 
-Install from apt `build-essential libopencv-dev python python3 pil.imagetk python3-opencv`.
+Install from apt `build-essential libopencv-dev python python3 pil.imagetk python3-opencv libgl1-dev freeglut3 freeglut3-dev libglew-dev mesa-utils`.
 
 Install apriltag core library from `https://github.com/AprilRobotics/apriltag/` (on ~master, or recent enough to have python bindings), following directions. Make sure the python bindings get installed: you may need to `mkdir -p ~/.local/lib/<python version>/site-packages`.
 

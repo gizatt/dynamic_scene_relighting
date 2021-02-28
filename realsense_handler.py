@@ -47,16 +47,17 @@ class RealsenseHandler():
         self.depth_intrinsics = self.depth_profile.get_intrinsics()
         self.w, self.h = self.depth_intrinsics.width, self.depth_intrinsics.height
     
-    def get_frame(self, include_pointcloud=False):
+    def get_frame(self, include_pointcloud=False, do_alignment=True):
         # Get frameset of color and depth
         frames = self.pipeline.wait_for_frames()
 
         # Align the depth frame to color frame
-        aligned_frames = self.align.process(frames)
+        if do_alignment:
+            frames = self.align.process(frames)
 
         # Get aligned frames
-        aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
-        color_frame = aligned_frames.get_color_frame()
+        aligned_depth_frame = frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
+        color_frame = frames.get_color_frame()
 
         # Validate that both frames are valid
         if not aligned_depth_frame or not color_frame:

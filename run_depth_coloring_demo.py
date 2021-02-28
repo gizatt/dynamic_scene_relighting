@@ -22,7 +22,7 @@ https://github.com/IntelRealSense/librealsense/blob/development/wrappers/python/
 '''
 
 # Subsample on depth image size
-sN = 4
+sN = 1
 
 def get_extrinsics(inv=False):
     extr = np.loadtxt("extrinsics.csv")
@@ -210,8 +210,8 @@ def run(dt):
                        (w, h, 0 if dt == 0 else 1.0 / dt, dt * 1000))
 
     print("Waiting for frame")
-    color_image, depth_image, points = realsense_manager.get_frame(include_pointcloud=True)
-    plt.imsave("out/curr_color_%03d.png" % iteration, color_image[::-1, ::-1, :])
+    color_image, depth_image, points = realsense_manager.get_frame(include_pointcloud=True, do_alignment=False)
+    #plt.imsave("out/curr_color_%03d.png" % iteration, color_image[::-1, ::-1, :])
     verts = np.asarray(points.get_vertices(2)).reshape(h*sN, w*sN, 3)
     verts = verts[::sN, ::sN, :]
 
@@ -224,33 +224,36 @@ def run(dt):
     depth_color_source = np.uint8(depth_color_source * 255)
     color_color_source = color_image[::sN, ::sN, :]
 
-    plt.imsave("out/curr_depth.png", depth_color_source[::-1, ::-1, ::-1])
+    #plt.imsave("out/curr_depth.png", depth_color_source[::-1, ::-1, ::-1])
 
     # Compute normals -- probably not accurate since image is very noisy
-    dy, dx = np.gradient(verts, axis=(0, 1))
-    n = np.cross(dx, dy)
-    norm = np.sqrt((n*n).sum(axis=2, keepdims=True))
-    normals = np.divide(n, norm, out=n, where=norm != 0)
-    normals = np.ascontiguousarray(normals)
-    normal_image = np.uint8(normals * 127 + 127)
-    plt.imsave("out/curr_normals.png", normal_image[::1, ::-1, :])
+    if False:
+        dy, dx = np.gradient(verts, axis=(0, 1))
+        n = np.cross(dx, dy)
+        norm = np.sqrt((n*n).sum(axis=2, keepdims=True))
+        normals = np.divide(n, norm, out=n, where=norm != 0)
+        normals = np.ascontiguousarray(normals)
+        normal_image = np.uint8(normals * 127 + 127)
+        #plt.imsave("out/curr_normals.png", normal_image[::1, ::-1, :])
 
-    # Simulate a light orbiting around the z axis by brighting
-    # base on dot product of a time-varying normal and the
-    # normal image.
-    t = iteration * np.pi/10
-    min_brightness_depth = 0.5*1000
-    max_brightness_depth = 1.6*1000
-    light_direction = np.array([np.cos(t), np.sin(t), 0.])
-    brightness = (light_direction * normals).sum(axis=-1)/2. + 1.
-    brightness[depth_image < min_brightness_depth] = 0.
-    brightness[depth_image > max_brightness_depth] = 0.
+        # Simulate a light orbiting around the z axis by brighting
+        # base on dot product of a time-varying normal and the
+        # normal image.
+        t = iteration * np.pi/10
+        min_brightness_depth = 0.5*1000
+        max_brightness_depth = 1.6*1000
+        light_direction = np.array([np.cos(t), np.sin(t), 0.])
+        brightness = (light_direction * normals).sum(axis=-1)/2. + 1.
+        brightness[depth_image < min_brightness_depth] = 0.
+        brightness[depth_image > max_brightness_depth] = 0.
 
-    brightness = np.repeat(brightness[:, :, np.newaxis], 3, axis=-1)
-    brightness_color_source = np.uint8(brightness * 255)
-    plt.imsave("out/curr_brightness_%03d.png" % iteration, brightness_color_source[::-1, ::-1, :])
+        brightness = np.repeat(brightness[:, :, np.newaxis], 3, axis=-1)
+        brightness_color_source = np.uint8(brightness * 255)
+        color_source =  brightness_color_source
+
+    #plt.imsave("out/curr_brightness_%03d.png" % iteration, brightness_color_source[::-1, ::-1, :])
     
-    color_source =  brightness_color_source
+    #color_source =  depth_color_source
 
     global image_data
     
