@@ -18,7 +18,7 @@ import OpenGL.GL as gl_better
 
 from apriltag import apriltag
 
-from realsense_handler import RealsenseHandler
+from .realsense_handler import RealsenseHandler
 
 '''
 Opens a fullscreen window and repeatedly:
@@ -39,7 +39,7 @@ window = pyglet.window.Window(
     fullscreen=True, vsync=True)
 
 # Create and allocate memory for the apriltag
-tag_path = "images/tag36_11_%05d.png" % 0
+tag_path = "../images/tag36_11_%05d.png" % 0
 base_tag = pyglet.image.load(tag_path)
 tag_w, tag_h = base_tag.width, base_tag.height
 
@@ -118,7 +118,7 @@ def log_detections():
         # Passed sanity check, so record this calibration pair.
         sanity_detection = sanity_detections[0]
         detection = detections[0]
-        with open("calibration_pairs.csv", "a") as f:
+        with open("../data/calibration_pairs.csv", "a") as f:
             for k in range(4):
                 #u1, v1 = projected_corners[k, :]
                 u1, v1 = sanity_detection['lb-rb-rt-lt'][k, :]

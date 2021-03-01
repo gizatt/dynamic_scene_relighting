@@ -50,7 +50,7 @@ def best_fit_transform(A, B):
     return T, R, t
 
 if __name__ == "__main__":
-    with open("calibration_pairs.csv", "r") as f:
+    with open("../data/calibration_pairs.csv", "r") as f:
         data = np.loadtxt(f, delimiter=",", skiprows=0)
         assert data.shape[1] == (2 + 2 + 3)
         print("Loaded %d example pairs" % data.shape[0])
