@@ -9,18 +9,20 @@ import pyglet
 import pyglet.gl as gl
 import OpenGL.GL as gl_better
 
+from pyshaders import from_string
 from calibration_utils import get_extrinsics, get_projector_gl_intrinsics
 
 class WindowManager(pyglet.window.Window):
-    def __init__(self):
+    def __init__(self, callback=None):
         super().__init__(
             config=gl.Config(
                 double_buffer=True,
                 samples=4  # MSAA,
             ),
             fullscreen=True, vsync=True)
-        #self.prep_program_and_buffers()
+        self.prep_program_and_buffers()
         self.fps_display = pyglet.window.FPSDisplay(self)
+        self.callback = callback
 
     def start(self):
         self.iteration = 0
@@ -28,19 +30,19 @@ class WindowManager(pyglet.window.Window):
         pyglet.app.run()
 
     def prep_program_and_buffers(self):
-        self.prog = self.ctx.program(
-            vertex_shader='''
+        self.prog = from_string(
+            verts='''
                 #version 330
                 uniform mat4 Mvp;
-                in vec3 in_position;
-                in vec4 in_color;
+                layout(location = 0) in vec3 in_position;
+                layout(location = 1) in vec4 in_color;
                 out vec4 color;
                 void main() {
                     gl_Position = Mvp * vec4(in_position, 1.0);
                     color = in_color;
                 }
             ''',
-            fragment_shader='''
+            frags='''
                 #version 330
                 uniform mat4 Mvp;
                 in vec4 color;
@@ -48,54 +50,35 @@ class WindowManager(pyglet.window.Window):
                 void main() {
                     f_color = color;
                 }
-            ''',
+            '''
         )
-        
-        self.geom_width, self.geom_height = 10, 10
-        #width = self.geom_width
-        #height = self.geom_height
-        dummy_verts = np.array([[-0.5, 0.5, -0.5, 0.5, 0.],
-                               [-0.5, -0.5, 0.5, 0.5, 0.],
-                               [1., 1.2, 1.5, 1.8, 2.0]], dtype='f4').T
-        self.num_points = dummy_verts.shape[0]
-        self.vert_vbo = self.ctx.buffer(
-            data=np.ascontiguousarray(dummy_verts), #, reserve=width*height*3*4, # 3 floats each
-            dynamic=True
+
+        self.num_pts = 1000
+        verts = np.random.random((self.num_pts, 3))
+        colors = np.random.random((self.num_pts, 4))
+        # MgNf = layout location M, N floats.
+        self.vertex_info = pyglet.graphics.vertex_list(
+            self.num_pts, ('0g3f', verts.ravel()), ('1g4f', colors.ravel())
         )
-        dummy_colors = np.array([
-            [1., 1., 1., 1., 1.],
-            [1., 1., 1., 1., 0.],
-            [1., 1., 1., 1., 0.],
-            [1., 1., 1., 1., 1.],
-        ], dtype='f4').T
-        self.color_vbo = self.ctx.buffer(
-            data=np.ascontiguousarray(dummy_colors), #, reserve=width*height*4*4,  # 4 floats each
-            dynamic=True
-        )
-        vao = self.ctx.vertex_array(self.prog,
-            [
-                (self.vert_vbo, "3f", 'in_position'),
-                (self.color_vbo, "4f", 'in_color')
-            ])
-        self.vaos = [vao]
 
     def on_draw(self):
         self.clear()
         width, height = self.get_size()
         gl.glViewport(0, 0, width, height)
     
+        gl.glPointSize(5.)
+        
         K_gl = get_projector_gl_intrinsics()
         TF = get_extrinsics()
         R = np.array([[-1., 0., 0., 0.],
                     [0., 1., 0., 0.],
                     [0., 0., -1., 0.],
                     [0., 0., 0., 1.]])
-        #full_mat = np.ascontiguousarray((K_gl.dot(TF.dot(R))).T.astype('f4'))
-        ##full_mat = np.eye(4, dtype='f4')
-        #self.prog['Mvp'].write(full_mat)
-        #gl.glPointSize(3.)
-        #for vao in self.vaos:
-        #    vao.render(mode=moderngl.POINTS, vertices=self.num_points)
+        full_mat = np.ascontiguousarray((K_gl.dot(TF.dot(R))).astype('f4'))
+        with self.prog.using():
+            self.prog.uniforms.Mvp = full_mat.tolist()
+            
+            self.vertex_info.draw(gl.GL_POINTS)
 
         gl.glMatrixMode(gl.GL_PROJECTION)
         gl.glLoadIdentity()
@@ -113,6 +96,8 @@ class WindowManager(pyglet.window.Window):
         self.iteration += 1
         self.set_caption("RealSense %d FPS (%.2fms)" %
             (0 if dt == 0 else 1.0 / dt, dt * 1000))
+        if self.callback:
+            self.callback(self)
 
     def update_geometry(self, points, colors):
         assert len(points.shape) == 3 and points.shape[-1] == 3
@@ -123,6 +108,11 @@ class WindowManager(pyglet.window.Window):
             if len(data) != vbo.size:
                 vbo.orphan(len(data))
             vbo.write(array)
-        write_to_vbo(self.vert_vbo, points)
-        write_to_vbo(self.color_vbo, colors)
-        self.num_points = points.shape[0] * points.shape[1]
+        num_pts = points.shape[0] * points.shape[1]
+        if self.vertex_info.get_size() != num_pts:
+            self.vertex_info.resize(num_pts)
+        def copy(dst, src):
+            np.array(dst, copy=False)[:] = src.ravel()
+        self.vertex_info._set_attribute_data(0, points.ravel())
+        self.vertex_info._set_attribute_data(1, colors.ravel())
+        self.num_pts = num_pts

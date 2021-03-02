@@ -69,5 +69,5 @@ if __name__ == "__main__":
     def update_geometry(cls):
         cls.update_geometry(fake_points, fake_colors)
 
-    wm = WindowManager()
+    wm = WindowManager(callback=update_geometry)
     wm.start()
