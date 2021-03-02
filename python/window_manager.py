@@ -64,11 +64,11 @@ class WindowManager(pyglet.window.Window):
         )
 
     def on_draw(self):
+        gl.glClearColor(0, 0.0, 0.0, 1.)
         self.clear()
         width, height = self.get_size()
         gl.glViewport(0, 0, width, height)
     
-        gl.glPointSize(10.)
         
         K_gl = get_projector_gl_intrinsics()
         TF = get_extrinsics()
@@ -79,7 +79,14 @@ class WindowManager(pyglet.window.Window):
         full_mat = np.ascontiguousarray((K_gl.dot(TF.dot(R))).astype('f4'))
         with self.prog.using():
             self.prog.uniforms.Mvp = full_mat.tolist()
-            
+            gl.glEnable(gl.GL_DEPTH_TEST)
+            gl.glEnable(gl.GL_BLEND)
+            gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
+            gl.glPointSize(15.)
+            distance = (0, 0, 1)
+            gl.glPointParameterfv(gl.GL_POINT_DISTANCE_ATTENUATION,
+                                (gl.GLfloat * 3)(*distance))
+            gl.glEnable(gl.GL_POINT_SPRITE)                    
             self.vertex_info.draw(gl.GL_POINTS)
 
         gl.glMatrixMode(gl.GL_PROJECTION)
@@ -90,6 +97,7 @@ class WindowManager(pyglet.window.Window):
         gl.glMatrixMode(gl.GL_TEXTURE)
         gl.glLoadIdentity()
         gl.glDisable(gl.GL_DEPTH_TEST)
+        gl.glDisable(gl.GL_BLEND)
 
         self.fps_display.draw()
         print("Done with draw")

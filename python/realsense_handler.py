@@ -14,7 +14,8 @@ class RealsenseHandler():
         Based on
         https://github.com/IntelRealSense/librealsense/blob/master/wrappers/python/examples/align-depth2color.py
     '''
-    def __init__(self, resolution=(640, 480), framerate=30, decimation_magnitude=1):
+    def __init__(self, resolution=(640, 480), framerate=30, decimation_magnitude=1,
+                 spatial_smooth=True, temporal_smooth=True):
         self.pipeline = rs.pipeline()
 
         #Create a config and configure the pipeline to stream
@@ -41,12 +42,21 @@ class RealsenseHandler():
         # We'll want to store the intrinsics once we start getting images.
         self.aligned_depth_K = None
 
+        self.filters = []
         # Decimation filter
         if decimation_magnitude > 1:
-            self.decimate_filter = rs.decimation_filter()
-            self.decimate_filter.set_option(rs.option.filter_magnitude, decimation_magnitude)
-        else:
-            self.decimate_filter = None
+            decimate_filter = rs.decimation_filter()
+            decimate_filter.set_option(rs.option.filter_magnitude, decimation_magnitude)
+            self.filters.append(decimate_filter)
+        
+        if spatial_smooth or temporal_smooth:
+            self.filters.append(rs.disparity_transform())
+        if spatial_smooth:
+            self.filters.append(rs.spatial_filter())
+        if temporal_smooth:
+            self.filters.append(rs.temporal_filter())
+        if spatial_smooth or temporal_smooth:
+            self.filters.append(rs.disparity_transform(False))
 
         # Pointcloud conversion utility.
         self.pc = rs.pointcloud()
@@ -67,9 +77,9 @@ class RealsenseHandler():
         aligned_depth_frame = frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
         color_frame = frames.get_color_frame()
 
-        # Apply decimation
-        if self.decimate_filter:
-            aligned_depth_frame = self.decimate_filter.process(aligned_depth_frame)
+        # Apply filters
+        for filter in self.filters:
+            aligned_depth_frame = filter.process(aligned_depth_frame)
 
         # Validate that both frames are valid
         if not aligned_depth_frame or not color_frame:
