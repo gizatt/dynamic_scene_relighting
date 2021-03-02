@@ -51,5 +51,5 @@ if __name__ == "__main__":
         color_source = depth_color_source
         cls.update_geometry(verts, color_source)
 
-    type("WindowManager", (WindowManager,),
-         {"data_loader_callback": update_geometry}).run()
+    wm = WindowManager(callback=update_geometry)
+    wm.start()
