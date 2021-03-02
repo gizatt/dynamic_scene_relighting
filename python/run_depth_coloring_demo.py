@@ -10,8 +10,8 @@ import numpy as np
 import pyglet
 import pyglet.gl as gl
 import OpenGL.GL as gl_better
-from .realsense_handler import RealsenseHandler
-from .projector_utils import *
+from realsense_handler import RealsenseHandler
+from calibration_utils import *
 
 '''
 Reads from RGBD camera and spits out (colorized) depth to the projector.
@@ -67,7 +67,7 @@ def on_draw():
     def print_curr_matrix():
         print(gl_better.glGetFloatv(gl_better.GL_PROJECTION_MATRIX))
     gl.glLoadIdentity()
-    gl_better.glMultMatrixd(get_intrinsics().T)
+    gl_better.glMultMatrixd(get_projector_gl_intrinsics().T)
     
 
     gl.glMatrixMode(gl.GL_TEXTURE)

@@ -1,12 +1,11 @@
 import numpy as np
 
 def get_extrinsics(inv=False):
-    extr = np.loadtxt("extrinsics.csv")
+    extr = np.loadtxt("../data/extrinsics.csv")
     if inv:
         extr[:3, :3] = extr[:3, :3].T
         extr[:3, 3] = -extr[:3, :3].dot(extr[:3, 3])
     return extr
-
 
 def convert_hz_intrinsic_to_opengl_projection(K,x0,y0,width,height,znear,zfar, window_coords='y up'):
     # https://gist.github.com/astraw/1341472#file_calib_test_numpy.py
@@ -28,13 +27,14 @@ def convert_hz_intrinsic_to_opengl_projection(K,x0,y0,width,height,znear,zfar, w
                          [0,0,q,qn],  # This row is standard glPerspective and sets near and far planes.
                          [0,0,-1,0]]) # This row is also standard glPerspective.
     return proj
+    
+def get_projector_intrinsics():
+    intr_3x3 = np.loadtxt("../data/projector_intrinsics.csv")
+    return intr_3x3
 
-def get_intrinsics():
-    intr_3x3 = np.loadtxt("projector_intrinsics.csv")
-
-def get_gl_intrinsics():
+def get_projector_gl_intrinsics():
     # REf https://amytabb.com/ts/2019_06_28/
-    intr_3x3 = np.loadtxt("projector_intrinsics.csv")
+    intr_3x3 = get_projector_intrinsics()
     cx = intr_3x3[0, 2]
     cy = intr_3x3[1, 2]
     width = cx * 2
@@ -67,8 +67,3 @@ def get_gl_intrinsics():
     #print("Total projection, second method: ", intr_mat_1)
     #print("Test project a point: ", intr_mat_1.dot(np.array([0.7, 0.5, 1.33, 1.])))
     return np.dot(NDC, K_gl)
-
-
-def get_fov():
-    fov = np.loadtxt("projector_fov.csv")
-    return fov

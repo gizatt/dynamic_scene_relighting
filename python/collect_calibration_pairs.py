@@ -18,7 +18,7 @@ import OpenGL.GL as gl_better
 
 from apriltag import apriltag
 
-from .realsense_handler import RealsenseHandler
+from realsense_handler import RealsenseHandler
 
 '''
 Opens a fullscreen window and repeatedly:

@@ -46,7 +46,7 @@ class RealsenseHandler():
         self.depth_profile = rs.video_stream_profile(self.profile.get_stream(rs.stream.depth))
         self.depth_intrinsics = self.depth_profile.get_intrinsics()
         self.w, self.h = self.depth_intrinsics.width, self.depth_intrinsics.height
-    
+
     def get_frame(self, include_pointcloud=False, do_alignment=True):
         # Get frameset of color and depth
         frames = self.pipeline.wait_for_frames()
