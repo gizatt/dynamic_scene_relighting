@@ -32,7 +32,8 @@ class WindowManager(pyglet.window.Window):
     def prep_program_and_buffers(self):
         self.prog = from_string(
             verts='''
-                #version 330
+                #version 300 es
+                precision mediump float;
                 uniform mat4 Mvp;
                 layout(location = 0) in vec3 in_position;
                 layout(location = 1) in vec4 in_color;
@@ -43,7 +44,8 @@ class WindowManager(pyglet.window.Window):
                 }
             ''',
             frags='''
-                #version 330
+                #version 300 es
+                precision mediump float;
                 uniform mat4 Mvp;
                 in vec4 color;
                 out vec4 f_color;
@@ -66,7 +68,7 @@ class WindowManager(pyglet.window.Window):
         width, height = self.get_size()
         gl.glViewport(0, 0, width, height)
     
-        gl.glPointSize(5.)
+        gl.glPointSize(10.)
         
         K_gl = get_projector_gl_intrinsics()
         TF = get_extrinsics()

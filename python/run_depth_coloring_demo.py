@@ -25,25 +25,30 @@ https://github.com/IntelRealSense/librealsense/blob/development/wrappers/python/
 
 if __name__ == "__main__":    
     # Subsample on depth image size
-    sN = 1
-    realsense_manager = RealsenseHandler()
+    sN = 4
+    realsense_manager = RealsenseHandler(
+        resolution=(640, 480),
+        framerate=30,
+        decimation_magnitude=sN
+    )
 
     def update_geometry(cls):
         print("Waiting for frame")
         color_image, depth_image, points = realsense_manager.get_frame(include_pointcloud=True, do_alignment=False)
+        color_image = color_image[::sN, ::sN, :]
         #plt.imsave("out/curr_color_%03d.png" % iteration, color_image[::-1, ::-1, :])
-        verts = np.asarray(points.get_vertices(2)).reshape(h*sN, w*sN, 3)
-        verts = verts[::sN, ::sN, :]
+        h, w = color_image.shape[:2]
+        verts = np.asarray(points.get_vertices(2)).reshape(h, w, 3)
+        #verts = verts[::sN, ::sN, :]
+        print(verts.shape)
 
-        depth_image = depth_image[::sN, ::sN]
         print("Max/mean depth: ", np.max(depth_image)/1000., np.mean(depth_image)/1000.)
-        min_depth = 1.0*1000
-        max_depth = 2.0*1000
+        min_depth = 0.5*1000
+        max_depth = 1.2*1000
         
-        depth_color_source = plt.get_cmap("hsv")((depth_image - min_depth)/(max_depth-min_depth))[:, :, :3]
+        depth_color_source = plt.get_cmap("hsv")((depth_image - min_depth)/(max_depth-min_depth))
         #depth_color_source = np.uint8(depth_color_source * 255)
-        color_color_source = color_image[::sN, ::sN, :]
-
+        
         #plt.imsave("out/curr_depth.png", depth_color_source[::-1, ::-1, ::-1])
         #color_source =  depth_color_source
 

@@ -59,10 +59,6 @@ class RealsenseHandler():
         # Get frameset of color and depth
         frames = self.pipeline.wait_for_frames()
 
-        # Apply decimation
-        if self.decimate_filter:
-            frames = self.decimate_filter.process(frames)
-
         # Align the depth frame to color frame
         if do_alignment:
             frames = self.align.process(frames)
@@ -71,6 +67,9 @@ class RealsenseHandler():
         aligned_depth_frame = frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
         color_frame = frames.get_color_frame()
 
+        # Apply decimation
+        if self.decimate_filter:
+            aligned_depth_frame = self.decimate_filter.process(aligned_depth_frame)
 
         # Validate that both frames are valid
         if not aligned_depth_frame or not color_frame:
