@@ -8,14 +8,7 @@ from functools import partial
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 import numpy as np
-import pyglet
-import pyglet.gl as gl
-import moderngl
-from pyrr import Matrix44
-import moderngl_window as mglw
-from moderngl_window.utils.scheduler import Scheduler
 
-from calibration_utils import get_extrinsics, get_projector_gl_intrinsics
 from window_manager import *
 
 if __name__ == "__main__":
@@ -76,5 +69,5 @@ if __name__ == "__main__":
     def update_geometry(cls):
         cls.update_geometry(fake_points, fake_colors)
 
-    type("WindowManager", (WindowManager,),
-         {"data_loader_callback": update_geometry}).run()
+    wm = WindowManager()
+    wm.start()

@@ -7,32 +7,25 @@ from functools import partial
 import numpy as np
 import pyglet
 import pyglet.gl as gl
-import moderngl
-import moderngl_window as mglw
-from moderngl_window.utils.scheduler import Scheduler
+import OpenGL.GL as gl_better
 
 from calibration_utils import get_extrinsics, get_projector_gl_intrinsics
 
-class WindowManager(mglw.WindowConfig):
-    gl_version = (3, 3)
-    window_size = (1280, 768)
-    fullscreen = True
-    data_loader_callback = None # Takes (self) as arg
-
-    @classmethod
-    def run(cls):
-        mglw.run_window_config(cls)
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.prep_program_and_buffers()
-        self.scheduler = Scheduler(self.timer)
-        if self.data_loader_callback:
-            self.update_event = self.scheduler.run_every(
-                self.data_loader_callback, 1.)
+class WindowManager(pyglet.window.Window):
+    def __init__(self):
+        super().__init__(
+            config=gl.Config(
+                double_buffer=True,
+                samples=4  # MSAA,
+            ),
+            fullscreen=True, vsync=True)
+        #self.prep_program_and_buffers()
+        self.fps_display = pyglet.window.FPSDisplay(self)
 
     def start(self):
-        self.run()
+        self.iteration = 0
+        pyglet.clock.schedule(self.on_idle)
+        pyglet.app.run()
 
     def prep_program_and_buffers(self):
         self.prog = self.ctx.program(
@@ -86,22 +79,40 @@ class WindowManager(mglw.WindowConfig):
             ])
         self.vaos = [vao]
 
-    def render(self, time, frametime):
-        self.scheduler.execute()
-        self.ctx.clear()
-
+    def on_draw(self):
+        self.clear()
+        width, height = self.get_size()
+        gl.glViewport(0, 0, width, height)
+    
         K_gl = get_projector_gl_intrinsics()
         TF = get_extrinsics()
         R = np.array([[-1., 0., 0., 0.],
                     [0., 1., 0., 0.],
                     [0., 0., -1., 0.],
                     [0., 0., 0., 1.]])
-        full_mat = np.ascontiguousarray((K_gl.dot(TF.dot(R))).T.astype('f4'))
-        #full_mat = np.eye(4, dtype='f4')
-        self.prog['Mvp'].write(full_mat)
-        gl.glPointSize(3.)
-        for vao in self.vaos:
-            vao.render(mode=moderngl.POINTS, vertices=self.num_points)
+        #full_mat = np.ascontiguousarray((K_gl.dot(TF.dot(R))).T.astype('f4'))
+        ##full_mat = np.eye(4, dtype='f4')
+        #self.prog['Mvp'].write(full_mat)
+        #gl.glPointSize(3.)
+        #for vao in self.vaos:
+        #    vao.render(mode=moderngl.POINTS, vertices=self.num_points)
+
+        gl.glMatrixMode(gl.GL_PROJECTION)
+        gl.glLoadIdentity()
+        gl.glOrtho(0, width, 0, height, -1, 1)
+        gl.glMatrixMode(gl.GL_MODELVIEW)
+        gl.glLoadIdentity()
+        gl.glMatrixMode(gl.GL_TEXTURE)
+        gl.glLoadIdentity()
+        gl.glDisable(gl.GL_DEPTH_TEST)
+
+        self.fps_display.draw()
+        print("Done with draw")
+
+    def on_idle(self, dt):
+        self.iteration += 1
+        self.set_caption("RealSense %d FPS (%.2fms)" %
+            (0 if dt == 0 else 1.0 / dt, dt * 1000))
 
     def update_geometry(self, points, colors):
         assert len(points.shape) == 3 and points.shape[-1] == 3
