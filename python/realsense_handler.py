@@ -14,14 +14,15 @@ class RealsenseHandler():
         Based on
         https://github.com/IntelRealSense/librealsense/blob/master/wrappers/python/examples/align-depth2color.py
     '''
-    def __init__(self):
+    def __init__(self, resolution=(640, 480), framerate=30, decimation_magnitude=1):
         self.pipeline = rs.pipeline()
 
         #Create a config and configure the pipeline to stream
         #  different resolutions of color and depth streams
         self.config = rs.config()
-        self.config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-        self.config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+        w, h = resolution
+        self.config.enable_stream(rs.stream.depth, w, h, rs.format.z16, framerate)
+        self.config.enable_stream(rs.stream.color, w, h, rs.format.bgr8, framerate)
 
         # Start streaming
         self.profile = self.pipeline.start(self.config)
@@ -40,6 +41,13 @@ class RealsenseHandler():
         # We'll want to store the intrinsics once we start getting images.
         self.aligned_depth_K = None
 
+        # Decimation filter
+        if decimation_magnitude > 1:
+            self.decimate_filter = rs.decimation_filter()
+            self.decimate_filter.set_option(rs.option.filter_magnitude, decimation_magnitude)
+        else:
+            self.decimate_filter = None
+
         # Pointcloud conversion utility.
         self.pc = rs.pointcloud()
         
@@ -51,6 +59,10 @@ class RealsenseHandler():
         # Get frameset of color and depth
         frames = self.pipeline.wait_for_frames()
 
+        # Apply decimation
+        if self.decimate_filter:
+            frames = self.decimate_filter.process(frames)
+
         # Align the depth frame to color frame
         if do_alignment:
             frames = self.align.process(frames)
@@ -58,6 +70,7 @@ class RealsenseHandler():
         # Get aligned frames
         aligned_depth_frame = frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
         color_frame = frames.get_color_frame()
+
 
         # Validate that both frames are valid
         if not aligned_depth_frame or not color_frame:
