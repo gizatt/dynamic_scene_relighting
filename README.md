@@ -16,11 +16,11 @@ Install from apt `build-essential libopencv-dev python python3 pil.imagetk pytho
 
 Install apriltag core library from `https://github.com/AprilRobotics/apriltag/` (on ~master, or recent enough to have python bindings), following directions. Make sure the python bindings get installed: you may need to `mkdir -p ~/.local/lib/<python version>/site-packages`.
 
-Install `librealsense` packages from source following  [https://github.com/IntelRealSense/librealsense/blob/master/doc/installation.md]. When doing CMake config, make sure the apriltag library is found, enable any examples you want (recommend `BUILD_EXAMPLES` and `BUILD_GRAPHICAL_EXAMPLES` so you at least get `realsense-viewer`), and `BUILD_PYTHON_BINDINGS` is on.
+Install `librealsense` packages from source following  [https://github.com/IntelRealSense/librealsense/blob/master/doc/installation.md]. When doing CMake config, make sure the apriltag library is found, enable any examples you want (recommend `BUILD_EXAMPLES` and `BUILD_GRAPHICAL_EXAMPLES` so you at least get `realsense-viewer`), and `BUILD_PYTHON_BINDINGS` is on. I set `PYTHON_INSTALL_DIR` to `/home/gizatt/envs/mp_env/lib/python3.7/dist_packages/pyrealsense2`.
 
 (Maybe follow [ROS Noetic install-from-apt instructions]. I use ` ros-noetic-desktop` for dev, but I suspect `ros-noetic-ros-base` will have everything you need to run this. But I don't require this yet, I'm seeing if I can avoid having ROS in there...)
 
-For Python, need Python3, `pillow scipy numpy pyglet pyopengl`.
+For Python, need Python3, `pillow scipy numpy matplotlib pyglet pyopengl`.
 
 For the face detector, I'm trying:
     - [tflite](https://www.tensorflow.org/lite/guide/python) for installing TFlite.

@@ -100,7 +100,6 @@ class WindowManager(pyglet.window.Window):
         gl.glDisable(gl.GL_BLEND)
 
         self.fps_display.draw()
-        print("Done with draw")
 
     def on_idle(self, dt):
         self.iteration += 1

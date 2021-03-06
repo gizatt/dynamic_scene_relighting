@@ -1,5 +1,6 @@
 import numpy as np
 import pyrealsense2.pyrealsense2 as rs
+import logging
 
 def to_camera_matrix(intrinsics):
     return np.array([[intrinsics.fx,             0, intrinsics.ppx],
@@ -29,9 +30,9 @@ class RealsenseHandler():
         self.profile = self.pipeline.start(self.config)
 
         # Getting the depth sensor's depth scale (see rs-align example for explanation)
+        self.color_sensor = self.profile.get_device().first_color_sensor()
         self.depth_sensor = self.profile.get_device().first_depth_sensor()
         self.depth_scale = self.depth_sensor.get_depth_scale()
-        print("Detected depth Scale is: " , self.depth_scale)
 
         # Create an align object
         # rs.align allows us to perform alignment of depth frames to others frames
@@ -65,6 +66,15 @@ class RealsenseHandler():
         self.depth_intrinsics = self.depth_profile.get_intrinsics()
         self.w, self.h = self.depth_intrinsics.width, self.depth_intrinsics.height
 
+    def set_exposure(self, exposure):
+        # Set exposure to 0 to set auto exposure
+        # Exposure ranges 1-10000.
+        if exposure <= 0:
+            self.color_sensor.set_option(rs.option.enable_auto_exposure, 1)
+        else:
+            self.color_sensor.set_option(rs.option.enable_auto_exposure, 0)
+            self.color_sensor.set_option(rs.option.exposure, exposure)
+
     def get_frame(self, include_pointcloud=False, do_alignment=True):
         # Get frameset of color and depth
         frames = self.pipeline.wait_for_frames()
@@ -83,7 +93,7 @@ class RealsenseHandler():
 
         # Validate that both frames are valid
         if not aligned_depth_frame or not color_frame:
-            print("Invalid aligned or color frame.")
+            logging.error("Invalid aligned or color frame.")
             return
 
         if self.aligned_depth_K is None:

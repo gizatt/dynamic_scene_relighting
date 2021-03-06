@@ -18,12 +18,12 @@ with mp_face_mesh.FaceMesh(
 
     # Flip the image horizontally for a later selfie-view display, and convert
     # the BGR image to RGB.
-    image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+    # Flip horizontally as well since it seems the camera is mounted upside down
+    image = cv2.cvtColor(cv2.flip(cv2.flip(image, 1), 0), cv2.COLOR_BGR2RGB)
     # To improve performance, optionally mark the image as not writeable to
     # pass by reference.
     image.flags.writeable = False
     results = face_mesh.process(image)
-
     # Draw the face mesh annotations on the image.
     image.flags.writeable = True
     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
@@ -35,7 +35,7 @@ with mp_face_mesh.FaceMesh(
             connections=mp_face_mesh.FACE_CONNECTIONS,
             landmark_drawing_spec=drawing_spec,
             connection_drawing_spec=drawing_spec)
-    cv2.imshow('MediaPipe FaceMesh', image)
+    cv2.imshow('MediaPipe FaceMesh', cv2.resize(image, (1280, 720)))
     cv2.resizeWindow('MediaPipe FaceMesh', (1280, 720))
     if cv2.waitKey(5) & 0xFF == 27:
       break
