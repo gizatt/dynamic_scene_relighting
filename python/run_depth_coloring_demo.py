@@ -4,6 +4,7 @@ import random
 import time
 import sys
 import logging
+import trimesh
 
 import meshcat
 import meshcat.geometry as g
@@ -12,12 +13,16 @@ import meshcat.transformations as tf
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy
+from scipy.ndimage.filters import gaussian_filter
 import pyglet
 import pyglet.gl as gl
 import OpenGL.GL as gl_better
 import mediapipe as mp
 mp_face_mesh = mp.solutions.face_mesh
 mp_drawing = mp.solutions.drawing_utils
+#canonical_face_model_path = "/home/gizatt/tools/mediapipe/mediapipe/modules/face_geometry/data/canonical_face_model.obj"
+#canonical_face_mesh = trimesh.load(canonical_face_model_path)
 
 from realsense_handler import RealsenseHandler
 from window_manager import *
@@ -118,7 +123,23 @@ def meshcat_draw_lights(vis, light_locations, light_attenuations):
         vis["lights"]["%d" % k].set_transform(
             tf.translation_matrix(light_locations[:, k]))
 
-
+def meshcat_draw_face_detection(vis, verts, points):
+    # Select the appropriate verts
+    pts = np.array(points)
+    selected_verts = verts[pts[:, 0], pts[:, 1], :].reshape(-1, 3).T
+    color = np.zeros(selected_verts.shape)
+    color[0, :] = 1.
+    #logging.info("Triangles shape: ", canonical_face_mesh.triangles)
+    #mesh = g.TriangularMeshGeometry(
+    #    vertices=selected_verts,
+    #    faces=canonical_face_mesh.faces
+    #)
+    #vis["face_mesh"].set_object(mesh)
+    vis["face_points"].set_object(g.Points(
+        g.PointsGeometry(selected_verts, color=color),
+        g.PointsMaterial(size=0.01)
+    ))
+    
 def colorize_depth(depth_image, min_depth, max_depth, cmap_name="hsv"):
     return plt.get_cmap("hsv")((depth_image - min_depth)/(max_depth-min_depth))
         
@@ -192,6 +213,7 @@ if __name__ == "__main__":
     # Makes point cloud look "upright" in meshcat vis
     camera_frame_vis.set_transform(tf.rotation_matrix(np.pi/2, [1., 0., 0]))
 
+
     meshcat_draw_frustrum(camera_frame_vis,
         TF=get_extrinsics(),
         K=get_projector_intrinsics(),
@@ -209,7 +231,8 @@ if __name__ == "__main__":
         "Orbiting hard light",
         "Orbiting soft light",
         "Moving light",
-        "soft face lights"
+        "soft face lights",
+        "highlight face"
     ]
     interface = InterfaceManager(modes=modes)
 
@@ -222,14 +245,15 @@ if __name__ == "__main__":
         spatial_smooth=False
     )
     face_mesh_detector = mp_face_mesh.FaceMesh(
-        min_detection_confidence=0.3,
-        min_tracking_confidence=0.3)
+        min_detection_confidence=0.2,
+        min_tracking_confidence=0.2)
 
     k = 0
     last_time = time.time()
     fps_est = 0.
+    face_detection_brightness = 0
     def on_idle(cls):
-        global k, camera_frame_vis, last_time, fps_est
+        global k, camera_frame_vis, last_time, fps_est, face_detection_brightness
         k += 1
         now_time = time.time()
         dt = now_time - last_time
@@ -250,7 +274,7 @@ if __name__ == "__main__":
 
         # Do drawing and saving as requested.
         if interface.get_meshcat_vis_active():
-            meshcat_draw_pointcloud(camera_frame_vis, verts, color_image)
+            meshcat_draw_pointcloud(camera_frame_vis["pc"], verts, color_image)
         
         divide_rate = interface.get_image_save_rate()
         if divide_rate > 0 and k % divide_rate == 0:
@@ -266,6 +290,24 @@ if __name__ == "__main__":
         depth_range = interface.get_depth_range()
         min_depth = depth_range[0]*1000
         max_depth = depth_range[1]*1000
+
+        landmark_pixel_locations = []
+        if interface.get_detector_active():
+            results = face_mesh_detector.process(color_full[::-1, ::, ::-1])
+            if results.multi_face_landmarks:
+                for face_k, face_landmarks in enumerate(results.multi_face_landmarks):
+                    for idx, landmark in enumerate(face_landmarks.landmark):
+                        landmark_px = mp_drawing._normalized_to_pixel_coordinates(
+                            landmark.x, landmark.y, image_width=w, image_height=h)
+                        # Unflip x-y.
+                        if landmark_px:
+                            landmark_pixel_locations.append([h - landmark_px[1], landmark_px[0]])
+                    meshcat_draw_face_detection(camera_frame_vis["faces"]["%d" % face_k], verts, landmark_pixel_locations)
+        if len(landmark_pixel_locations) == 0:
+            camera_frame_vis["faces"].delete()
+            logging.info("No face detections")
+        else:
+            logging.info("Face detection this loop.")
 
         # Finally, branch by demo mode.
         mode_name = interface.get_demo_mode()
@@ -323,6 +365,24 @@ if __name__ == "__main__":
             brightness *= np.logical_and(
                 depth_image >= min_depth, depth_image <= max_depth)
             color_source = np.dstack([brightness]*4)
+        elif mode_name == "highlight face":
+            # Flip BGR to RGB and flip vertically to make the detector happy.
+            # Remember to un-flip later!
+            brightness = np.zeros(depth_image.shape[:2]) + 0.5
+            face_brightness = np.zeros(depth_image.shape[:2]) + 0.5
+            # Highlight each of the points.
+            # This is crap -- I should be doing lots of mesh work --
+            # but translating from mediapipe to a mesh, and then getting that into my
+            # GL pipeline, will take too long before demo.                
+            if len(landmark_pixel_locations) > 0:
+                pts = np.array(landmark_pixel_locations)
+                face_brightness[pts[:, 0], pts[:, 1]] = 1.0
+                face_brightness = gaussian_filter(face_brightness, sigma=5)
+            
+            color_source = np.dstack([brightness]*4)
+            color_source[:, :, 0] = face_brightness
+            color_source[:, :, 2] = face_brightness
+            color_source[:, :, 3] = 1.
         else:
             logging.error("Bad mode name: %s" % mode_name)
             return
@@ -331,22 +391,6 @@ if __name__ == "__main__":
             meshcat_draw_lights(camera_frame_vis, light_locations, light_attenuations)
         else:
             camera_frame_vis["lights"].delete()
-
-        results = face_mesh_detector.process(color_image)
-        if results.multi_face_landmarks:
-            for face_landmarks in results.multi_face_landmarks:
-                logging.info("Had a face!")
-                landmark_pixel_locations = []
-                for idx, landmark in enumerate(face_landmarks.landmark):
-                    if ((landmark.HasField('visibility') and
-                        landmark.visibility < VISIBILITY_THRESHOLD) or
-                        (landmark.HasField('presence') and
-                        landmark.presence < PRESENCE_THRESHOLD)):
-                        continue
-                    landmark_px = mp_drawing._normalized_to_pixel_coordinates(
-                        landmark.x, landmark.y, h, w)
-                    landmark_pixel_locations.append(landmark_px)
-                logging.info("Pixel locations: %s", str(landmark_pixel_locations))
 
         #color_source = depth_color_source
         # copy image data to pyglet

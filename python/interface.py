@@ -46,6 +46,11 @@ class InterfaceManager():
         self.toggle_meshcat_vis_item = FunctionItem("Disable meshcat vis", self.toggle_meshcat_vis)
         self.menu.append_item(self.toggle_meshcat_vis_item)
 
+        # Enable/disable face detection
+        self.face_detection_active = True
+        self.toggle_detector_item = FunctionItem("Disable face detector", self.toggle_face_detector)
+        self.menu.append_item(self.toggle_detector_item)
+
         # Adjust image save rate
         self.image_save_rate = 0
         self.set_image_save_rate_item = FunctionItem(
@@ -106,6 +111,17 @@ class InterfaceManager():
                     "Set frame divider for image saving [curr %d]" % self.image_save_rate
         except ValueError():
             pass
+
+    def get_detector_active(self):
+        return self.face_detection_active
+
+    def toggle_face_detector(self):
+        if self.face_detection_active:
+            self.face_detection_active = False
+            self.toggle_detector_item.text = "Enable face detector"
+        else:
+            self.face_detection_active = True
+            self.toggle_detector_item.text = "Disable face detector"
 
     def toggle_meshcat_vis(self):
         if self.meshcat_vis_active:
