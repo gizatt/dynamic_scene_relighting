@@ -22,6 +22,7 @@ mp_drawing = mp.solutions.drawing_utils
 from realsense_handler import RealsenseHandler
 from window_manager import *
 from interface import InterfaceManager
+from calibration_utils import get_extrinsics, get_projector_intrinsics
 
 
 '''
@@ -33,16 +34,74 @@ Significant reference to
 https://github.com/IntelRealSense/librealsense/blob/development/wrappers/python/examples/pyglet_pointcloud_viewer.py
 '''
 
-def do_meshcat_vis(vis, verts, colors):
+def meshcat_draw_frustrum(vis, TF, K, near_distance, far_distance, w, h):
+    # TODO(gizatt): This obviously isn't right -- the projected
+    # light doesn't match the drawn view frustrum.
+    # Not dealing with, for now; I think the issue is a combination
+    # of bad intrinsics and bugs related to flipped image coordinates
+    # somewhere along the pipeline.
+    image_bbox_verts = np.array([
+        [0., w, w, 0.],
+        [0., 0., h, h]
+    ])
+    TF_inv = np.eye(4)
+    TF_inv[:3, :3] = TF[:3, :3].T
+    TF_inv[:3, 3] = -TF_inv[:3, :3].dot(TF[:3, 3])
+    TF = TF_inv
+            
+    N = image_bbox_verts.shape[1]
+    Kinv = np.linalg.inv(K)
+    def project_bbox_verts(dist):
+        homog = np.concatenate(
+            [image_bbox_verts*dist, dist*np.ones((1, N))],
+            axis=0
+        )
+        pts = np.dot(Kinv, homog)
+        return ((TF[:3, :3].dot(pts)).T + TF[:3, 3]).T
+    near_pts = project_bbox_verts(near_distance)
+    far_pts= project_bbox_verts(far_distance)
+    near_colors = np.zeros((3, N))
+    near_colors[1, :] = 1.
+    far_colors = np.zeros((3, N))
+    far_colors[2, :] = 1.
+    
+    vis['frustrum']['near'].set_object(g.LineLoop(
+        g.PointsGeometry(near_pts, color=near_colors),
+        g.MeshBasicMaterial(vertexColors=True, linewidth=0.1)))
+    vis['frustrum']['far'].set_object(g.LineLoop(
+        g.PointsGeometry(far_pts, color=far_colors),
+        g.MeshBasicMaterial(vertexColors=True, linewidth=0.1)))
+    connecting = np.zeros((3, N*2))
+    connecting[:, ::2] = near_pts
+    connecting[:, 1::2] = far_pts
+    connecting_colors = np.zeros((3, N*2))
+    connecting_colors[:, ::2] = near_colors
+    connecting_colors[:, 1::2] = far_colors
+    vis['frustrum']['connecting'].set_object(g.LineSegments(
+        g.PointsGeometry(connecting, color=connecting_colors),
+        g.MeshBasicMaterial(vertexColors=True, linewidth=1.)
+    ))
+
+def meshcat_draw_pointcloud(vis, verts, colors):
     color_vis = colors[:, :, ::-1].astype(np.float32) / 255.
     verts_vis = verts.reshape(-1, 3).T
     color_vis = color_vis.reshape(-1, 3).T
-    camera_frame_vis.set_object(g.Points(
+    vis.set_object(g.Points(
         g.PointsGeometry(verts_vis, color=color_vis),
         g.PointsMaterial(size=0.01)
     ))
 
+def meshcat_draw_lights(vis, light_locations):
+    N = light_locations.shape[1]
+    vis.set_object(g.Points(
+        g.PointsGeometry(
+            light_locations,
+            color=np.stack([np.array([1., 0.8, 0.7])]*N, axis=-1))
+    ))
+
 if __name__ == "__main__":    
+    logging.basicConfig(filename='../out/info.log', filemode='w', level=logging.DEBUG)
+
     # First connect to meshcat: this'll block if there's no server + display a helpful
     # reminder for me to start a server.
     print("Opening meshcat server at default url: make sure meshcat-server is running.")
@@ -51,7 +110,14 @@ if __name__ == "__main__":
     # Makes point cloud look "upright" in meshcat vis
     camera_frame_vis.set_transform(tf.rotation_matrix(np.pi/2, [1., 0., 0]))
 
-    logging.basicConfig(filename='../out/info.log', filemode='w', level=logging.DEBUG)
+    meshcat_draw_frustrum(camera_frame_vis,
+        TF=get_extrinsics(),
+        K=get_projector_intrinsics(),
+        near_distance=0.025,
+        far_distance=1.,
+        w=1280,
+        h=768
+    )
 
     interface = InterfaceManager()
 
@@ -83,9 +149,10 @@ if __name__ == "__main__":
         verts = np.asarray(points.get_vertices(2)).reshape(h, w, 3)
 
         if interface.get_meshcat_vis_active():
-            do_meshcat_vis(camera_frame_vis, verts, color_image)
+            meshcat_draw_pointcloud(camera_frame_vis, verts, color_image)
         
-        if k % 30 == 0:
+        divide_rate = interface.get_image_save_rate()
+        if divide_rate > 0 and k % divide_rate == 0:
             logging.info("Sending downsampled pts to meshcat and saving color image")
             plt.imsave("../out/curr_color.png", color_full[::-1, ::-1, ::-1])
             #cv2.imwrite("../out/curr_depth.png" % k, depth_image[::-1, ::-1].astype(np.uint16))

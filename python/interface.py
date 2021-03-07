@@ -23,7 +23,27 @@ class InterfaceManager():
         self.toggle_meshcat_vis_item = FunctionItem("Disable meshcat vis", self.toggle_meshcat_vis)
         self.menu.append_item(self.toggle_meshcat_vis_item)
 
+        # Adjust image save rate
+        self.image_save_rate = 30
+        self.set_image_save_rate_item = FunctionItem(
+            "Set frame divider for image saving [curr %d]" % self.image_save_rate,
+            self.set_image_save_rate)
+        self.menu.append_item(self.set_image_save_rate_item)
         self.menu.start()
+
+    def get_image_save_rate(self):
+        return self.image_save_rate
+
+    def set_image_save_rate(self):
+        new_rate = input("Save image every [enter input] frames (0 to disable).")
+        try:
+            new_rate = int(new_rate)
+            if new_rate >= 0:
+                self.image_save_rate = new_rate
+                self.set_image_save_rate_item.text = \
+                    "Set frame divider for image saving [curr %d]" % self.image_save_rate
+        except ValueError():
+            pass
 
     def toggle_meshcat_vis(self):
         if self.meshcat_vis_active:
