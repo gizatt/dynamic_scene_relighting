@@ -174,7 +174,7 @@ def calc_light_brightness(verts, light_locations, light_attenuations, normals=No
         if light_attenuations[k] > 0.:
             # "Ambient" being much more generous about allowing light at 
             # slanted normals
-            brightness_ambient = np.tanh(alignments*10.)/(light_attenuations[k]*distances)
+            brightness_ambient = np.tanh(alignments*2.)/(light_attenuations[k]*distances)
             total_brightness += brightness_ambient
 
     return np.clip(total_brightness, 0., 1.)
@@ -402,10 +402,11 @@ if __name__ == "__main__":
         elif mode_name == "Moving light":
             light_locations, light_attenuations = generate_light_info(
                 pattern_name="orbiting single light",
-                xyz_center=np.array([0., 0., 0.9]),
-                xyz_amplitude=np.array([0.0, 0.0, 0.3]),
+                xyz_center=np.array([0., 0., 0.8]),
+                xyz_amplitude=np.array([0.0, 0.0, 0.25]),
                 attenuation=25.0)
             brightness = calc_light_brightness(verts, light_locations, light_attenuations)
+            brightness = gaussian_filter(brightness, sigma=2)
             color_source = np.dstack([brightness]*4)
         elif mode_name == "soft face lights":
             light_locations, light_attenuations = generate_light_info(
@@ -413,6 +414,7 @@ if __name__ == "__main__":
             brightness = calc_light_brightness(verts, light_locations, light_attenuations)
             brightness *= np.logical_and(
                 depth_image >= min_depth, depth_image <= max_depth)
+            brightness = gaussian_filter(brightness, sigma=2)
             color_source = np.dstack([brightness]*4)
         elif mode_name == "highlight face":
             # Flip BGR to RGB and flip vertically to make the detector happy.
