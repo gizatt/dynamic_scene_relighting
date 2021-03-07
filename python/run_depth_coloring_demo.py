@@ -151,10 +151,11 @@ def calc_normals(verts):
     normals = np.ascontiguousarray(normals)
     return normals
 
-def calc_light_brightness(verts, light_locations, light_attenuations):
+def calc_light_brightness(verts, light_locations, light_attenuations, normals=None):
     # Light locations should be a 3xN list of light locations.
     # This should *really* be done in a shader, not by hand like this.
-    normals = calc_normals(verts)
+    if normals is None:
+        normals = calc_normals(verts)
 
     N = light_locations.shape[1]
     assert light_locations.shape[0] == 3, light_locations.shape
@@ -183,10 +184,14 @@ def generate_light_info(pattern_name, **kwargs):
         xyz_center = kwargs["xyz_center"]
         xyz_amplitude = kwargs["xyz_amplitude"]
         a = kwargs["attenuation"]
+        if "phase" in kwargs.keys():
+            phase = kwargs["phase"]
+        else:
+            phase = 0.
         light_location = xyz_center + np.array([
-            np.cos(time.time()),
-            np.sin(time.time()),
-            np.sin(time.time())]) * xyz_amplitude
+            np.cos(time.time() + phase),
+            np.sin(time.time() + phase),
+            np.sin(time.time() + phase)]) * xyz_amplitude
         light_locations = light_location.reshape(3, 1)
         light_attenuations = [a]
     elif pattern_name == "soft face lights":
@@ -228,8 +233,11 @@ if __name__ == "__main__":
         "Depth recoloring",
         "Normal recoloring",
         "Depth-colored rotating light",
+        "Normal-colored orbiting soft light",
         "Orbiting hard light",
         "Orbiting soft light",
+        "Orbiting soft light pair",
+        "Orbiting soft light with color variation",
         "Moving light",
         "soft face lights",
         "highlight face"
@@ -245,7 +253,7 @@ if __name__ == "__main__":
         spatial_smooth=False
     )
     face_mesh_detector = mp_face_mesh.FaceMesh(
-        min_detection_confidence=0.2,
+        min_detection_confidence=0.3,
         min_tracking_confidence=0.2)
 
     k = 0
@@ -302,9 +310,11 @@ if __name__ == "__main__":
                         # Unflip x-y.
                         if landmark_px:
                             landmark_pixel_locations.append([h - landmark_px[1], landmark_px[0]])
-                    meshcat_draw_face_detection(camera_frame_vis["faces"]["%d" % face_k], verts, landmark_pixel_locations)
+                    meshcat_draw_face_detection(camera_frame_vis["faces"]["faces"]["%d" % face_k], verts, landmark_pixel_locations)
         if len(landmark_pixel_locations) == 0:
-            camera_frame_vis["faces"].delete()
+            # Double-deep "faces" so I can disable vis in meshcat and have
+            # it persist it face detection fails for a bit.
+            camera_frame_vis["faces"]["faces"].delete()
             logging.info("No face detections")
         else:
             logging.info("Face detection this loop.")
@@ -334,6 +344,15 @@ if __name__ == "__main__":
             brightness *= np.logical_and(
                 depth_image >= min_depth, depth_image <= max_depth)
             color_source[:, :, -1] = brightness
+        elif mode_name == "Normal-colored orbiting soft light":
+            light_locations, light_attenuations = generate_light_info(
+                pattern_name="orbiting single light",
+                xyz_center=np.array([0., 0., 0.7]),
+                xyz_amplitude=np.array([0.3, 0.3, 0.]),
+                attenuation=10.0)
+            normals = calc_normals(verts)
+            brightness = calc_light_brightness(verts, light_locations, light_attenuations, normals=normals)
+            color_source = np.concatenate([normals, np.square(brightness[:, :, np.newaxis])], axis=-1)
         elif mode_name == "Orbiting hard light":
             light_locations, light_attenuations = generate_light_info(
                 pattern_name="orbiting single light",
@@ -350,6 +369,36 @@ if __name__ == "__main__":
                 attenuation=10.0)
             brightness = calc_light_brightness(verts, light_locations, light_attenuations)
             color_source = np.dstack([brightness]*4)
+        elif mode_name == "Orbiting soft light pair":
+            light_locations_red, light_attenuations_red = generate_light_info(
+                pattern_name="orbiting single light",
+                xyz_center=np.array([0., 0., 0.7]),
+                xyz_amplitude=np.array([0.3, 0.3, 0.]),
+                attenuation=10.0)
+            brightness_red = calc_light_brightness(verts, light_locations_red, light_attenuations_red)
+            light_locations_blue, light_attenuations_blue = generate_light_info(
+                pattern_name="orbiting single light",
+                xyz_center=np.array([0., 0., 0.7]),
+                xyz_amplitude=np.array([0.3, 0.3, 0.]),
+                attenuation=10.0, phase=np.pi)
+            brightness_blue = calc_light_brightness(verts, light_locations_blue, light_attenuations_blue)
+            color_source = np.zeros(brightness_red.shape + (4,))
+            color_source[:, :, 0] = brightness_red
+            color_source[:, :, 1] = brightness_red*0.5
+            color_source[:, :, 2] = brightness_blue
+            color_source[:, :, 3] = np.maximum(brightness_red, brightness_blue)
+            light_locations = np.hstack([light_locations_red, light_locations_blue])
+            light_attenuations = light_attenuations_red + light_attenuations_blue
+        elif mode_name == "Orbiting soft light with color variation":
+            light_locations, light_attenuations = generate_light_info(
+                pattern_name="orbiting single light",
+                xyz_center=np.array([0., 0., 0.7]),
+                xyz_amplitude=np.array([0.3, 0.3, 0.]),
+                attenuation=10.0)
+            brightness = calc_light_brightness(verts, light_locations, light_attenuations)
+            color_source = np.dstack([brightness]*4)
+            color_source[:, :, 0] *= np.cos(time.time()/1.123)*0.5 + 0.5
+            color_source[:, :, 1] *= np.sin(time.time()/1.123)*0.5 + 0.5
         elif mode_name == "Moving light":
             light_locations, light_attenuations = generate_light_info(
                 pattern_name="orbiting single light",
@@ -392,7 +441,6 @@ if __name__ == "__main__":
         else:
             camera_frame_vis["lights"].delete()
 
-        #color_source = depth_color_source
         # copy image data to pyglet
         cls.update_geometry(verts, color_source)
 
