@@ -82,7 +82,7 @@ class WindowManager(pyglet.window.Window):
             gl.glEnable(gl.GL_DEPTH_TEST)
             gl.glEnable(gl.GL_BLEND)
             gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE_MINUS_SRC_ALPHA)
-            gl.glPointSize(15.)
+            gl.glPointSize(25.)
             distance = (0, 0, 1)
             gl.glPointParameterfv(gl.GL_POINT_DISTANCE_ATTENUATION,
                                 (gl.GLfloat * 3)(*distance))

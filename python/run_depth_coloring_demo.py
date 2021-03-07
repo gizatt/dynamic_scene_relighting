@@ -90,6 +90,12 @@ def meshcat_draw_frustrum(vis, TF, K, near_distance, far_distance, w, h):
         g.MeshBasicMaterial(vertexColors=True, linewidth=1.)
     ))
 
+    # Draw a little box for the projector :)
+    vis['projector'].set_object(
+        g.Box([0.1, 0.1, 0.1]),
+        g.MeshLambertMaterial(
+            color=0xaaffaa))
+
 def meshcat_draw_pointcloud(vis, verts, colors):
     color_vis = colors[:, :, ::-1].astype(np.float32) / 255.
     verts_vis = verts.reshape(-1, 3).T
@@ -162,14 +168,14 @@ def generate_light_info(pattern_name, **kwargs):
             np.sin(time.time())]) * xyz_amplitude
         light_locations = light_location.reshape(3, 1)
         light_attenuations = [a]
-    elif pattern_name == "rembrandt lights":
-        # Key light up and to the one side (camera frame);
-        # fill light to the other, and weaker.
+    elif pattern_name == "soft face lights":
         light_locations = np.array([
-            [-1., 1., 0.],
-            [1., 0., 0.]
+            [-0.3, 0.3, 0.8],
+            [-0.3, -0.3, 0.8],
+            [0.3, -0.3, 0.8],
+            [0.3, 0.3, 0.8],
         ]).T
-        light_attenuations = [0.0, 1.]
+        light_attenuations = [40.0, 40.0, 40.0, 40.0]
     else:
         raise NotImplementedError("Rotating light pattern_name %s" % pattern_name)
     return light_locations, light_attenuations
@@ -196,13 +202,14 @@ if __name__ == "__main__":
     )
 
     modes = [
+        "Off",
         "Depth recoloring",
         "Normal recoloring",
         "Depth-colored rotating light",
         "Orbiting hard light",
         "Orbiting soft light",
         "Moving light",
-        "Rembrandt lights"
+        "soft face lights"
     ]
     interface = InterfaceManager(modes=modes)
 
@@ -211,7 +218,8 @@ if __name__ == "__main__":
     realsense_manager = RealsenseHandler(
         resolution=(640, 480),
         framerate=30,
-        decimation_magnitude=sN
+        decimation_magnitude=sN,
+        spatial_smooth=False
     )
     face_mesh_detector = mp_face_mesh.FaceMesh(
         min_detection_confidence=0.3,
@@ -262,8 +270,12 @@ if __name__ == "__main__":
         # Finally, branch by demo mode.
         mode_name = interface.get_demo_mode()
         light_locations = None
-        if mode_name == "Depth recoloring":
+        if mode_name == "Off":
+            color_source = np.zeros(depth_image.shape[:2] + (4,))
+        elif mode_name == "Depth recoloring":
             color_source = colorize_depth(depth_image, min_depth, max_depth)
+            color_source[:, :, 3] = np.logical_and(
+                depth_image >= min_depth, depth_image <= max_depth)
         elif mode_name == "Normal recoloring":
             normals = calc_normals(verts)
             color_source = np.ones(normals.shape[:2] + (4,))
@@ -272,8 +284,8 @@ if __name__ == "__main__":
             color_source = colorize_depth(depth_image, min_depth, max_depth)
             light_locations, light_attenuations = generate_light_info(
                 pattern_name="orbiting single light",
-                xyz_center=np.array([0., 0., 0.7]),
-                xyz_amplitude=np.array([1.0, 1.0, 0.0]),
+                xyz_center=np.array([0., 0., 0.5]),
+                xyz_amplitude=np.array([0.8, 0.8, 0.8]),
                 attenuation=0.0)
             brightness = calc_light_brightness(
                 verts, light_locations, light_attenuations)
@@ -304,10 +316,12 @@ if __name__ == "__main__":
                 attenuation=25.0)
             brightness = calc_light_brightness(verts, light_locations, light_attenuations)
             color_source = np.dstack([brightness]*4)
-        elif mode_name == "Rembrandt lights":
+        elif mode_name == "soft face lights":
             light_locations, light_attenuations = generate_light_info(
-                pattern_name="rembrandt lights")
+                pattern_name="soft face lights")
             brightness = calc_light_brightness(verts, light_locations, light_attenuations)
+            brightness *= np.logical_and(
+                depth_image >= min_depth, depth_image <= max_depth)
             color_source = np.dstack([brightness]*4)
         else:
             logging.error("Bad mode name: %s" % mode_name)

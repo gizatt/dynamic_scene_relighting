@@ -22,7 +22,7 @@ class InterfaceManager():
         self.set_camera_exposure = FunctionItem("Set exposure", self.update_exposure)
         self.camera_menu.append_item(self.set_camera_exposure)
         self.exposure = 0
-        self.depth_range = [0.9, 1.1]
+        self.depth_range = [1.0, 1.25]
         self.set_min_depth_item = FunctionItem("Set min depth [%f]" % self.depth_range[0], self.set_min_depth)
         self.set_max_depth_item = FunctionItem("Set max depth [%f]" % self.depth_range[1], self.set_max_depth)
         self.camera_menu.append_item(self.set_min_depth_item)
